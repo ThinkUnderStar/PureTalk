@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: puretalk-ai
+Version: 0.1.0
+Summary: PureTalk AI 服务 - 基于 LangGraph + DeepSeek 的智能助手
+Requires-Python: >=3.10
+Requires-Dist: langgraph
+Requires-Dist: langchain
+Requires-Dist: langchain-deepseek
+Requires-Dist: langchain-ollama
+Requires-Dist: fastapi
+Requires-Dist: uvicorn
+Requires-Dist: httpx
+Requires-Dist: pydantic
+Requires-Dist: python-dotenv

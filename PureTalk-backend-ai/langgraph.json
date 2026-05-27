@@ -1,0 +1,9 @@
+{
+    "dependencies": ["."],
+    "graphs": {
+        "user_agent": "./src/puretalk_ai/agents/user_agent.py:user_agent",
+        "admin_agent": "./src/puretalk_ai/agents/admin_agent.py:admin_agent",
+        "root_agent": "./src/puretalk_ai/agents/root_agent.py:root_agent"
+    },
+    "env": ".env"
+}

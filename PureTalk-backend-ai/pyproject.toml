@@ -1,0 +1,23 @@
+[project]
+name = "puretalk-ai"
+version = "0.1.0"
+description = "PureTalk AI 服务 - 基于 LangGraph + DeepSeek 的智能助手"
+requires-python = ">=3.10"
+dependencies = [
+    "langgraph",
+    "langchain",
+    "langchain-deepseek",
+    "langchain-ollama",
+    "fastapi",
+    "uvicorn",
+    "httpx",
+    "pydantic",
+    "python-dotenv",
+]
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
