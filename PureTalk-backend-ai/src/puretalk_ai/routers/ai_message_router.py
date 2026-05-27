@@ -5,7 +5,7 @@ from puretalk_ai.agents.admin_agent import admin_agent
 from puretalk_ai.agents.root_agent import root_agent
 from puretalk_ai.agents.user_agent import user_agent
 from puretalk_ai.schemas.do_chat import DoChat
-from puretalk_ai.tools.contextvars import current_user_id, current_user_role, current_user_status, current_user_name
+from puretalk_ai.core.contextvars import current_user_id, current_user_role, current_user_status, current_user_name
 
 #创建路由
 ai_message_api_router = APIRouter(prefix="/ai", tags=["AI"])

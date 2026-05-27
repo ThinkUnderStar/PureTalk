@@ -1,5 +1,5 @@
 from langchain.agents.middleware import dynamic_prompt
-from puretalk_ai.tools.contextvars import current_user_name
+from puretalk_ai.core.contextvars import current_user_name
 
 @dynamic_prompt
 def admin_system_prompt_middleware(request) -> str:
