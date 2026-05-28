@@ -8,18 +8,17 @@ from puretalk_ai.config.settings import JAVA_BACKEND_URL, SERVICE_API_KEY
 from puretalk_ai.core.contextvars import current_user_id
 
 
-class SearchPostsModel(BaseModel):
-    keyword: str = Field(...,description="要搜索的关键词")
+class GetPostsModel(BaseModel):
     category_id: int = Field(0,description="排序方式：0=综合排序，1=最热排序，2=最新排序。默认综合排序。")
     page: int = Field(1,description="页码")
     size: int = Field(10,description="每页数量")
 
-class SearchPostsTool(BaseTool):
-    name : str = "search_posts_tool"
-    description : str = "搜索PureTalk论坛网站上公开的帖子"
-    args_schema : Type[BaseModel] = SearchPostsModel
+class GetPostsTool(BaseTool):
+    name : str = "get_posts_tool"
+    description : str = "按照规定的排序获取帖子"
+    args_schema : Type[BaseModel] = GetPostsModel
 
-    def _run(self, keyword: str, category_id: int, page: int, size: int) -> str:
+    def _run(self,  category_id: int, page: int, size: int) -> str:
         #设置请求头
         headers = {
             "X-Service-Token": SERVICE_API_KEY,
@@ -28,9 +27,8 @@ class SearchPostsTool(BaseTool):
 
         # 发送HTTP请求，并解析响应
         response = httpx.get(
-            f"{JAVA_BACKEND_URL}/api/post/search",
+            f"{JAVA_BACKEND_URL}/api/post",
             params={
-                "str": keyword,
                 "categoryId": category_id,
                 "page": page,
                 "size": size
@@ -39,12 +37,12 @@ class SearchPostsTool(BaseTool):
         )
 
         if response.status_code != 200:
-            return f"搜索接口异常，HTTP状态码：{response.status_code}"
+            return f"获取帖子列表异常，HTTP状态码：{response.status_code}"
 
         result = response.json()
 
         if result.get("code") != 200:
-            return f"搜索失败：{result.get('message', '未知错误')}"
+            return f"获取失败：{result.get('message', '未知错误')}"
 
         data = result.get("data", {})
 

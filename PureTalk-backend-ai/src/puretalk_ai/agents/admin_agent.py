@@ -1,13 +1,17 @@
 from langchain.agents import create_agent
 
+from puretalk_ai.core.tools_bean import search_posts_tool_bean, get_posts_tool_bean
 from puretalk_ai.llm.deepseek import deepseek_llm
 from puretalk_ai.middlewares.admin_system_prompt_middleware import admin_system_prompt_middleware
 
 #创建普通用户的智能体
 admin_agent = create_agent(
     model=deepseek_llm,
-    tools=[],
-    # middleware=[admin_system_prompt_middleware],
+    tools=[
+        search_posts_tool_bean,
+        get_posts_tool_bean,
+    ],
+    middleware=[admin_system_prompt_middleware],
     system_prompt= f"""
         你是 PureTalk 论坛的 AI 助手，正在为管理员提供帮助。
 

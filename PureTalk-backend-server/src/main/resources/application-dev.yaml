@@ -65,3 +65,7 @@ logging:
 ai:
   service:
     url: http://localhost:8002   # Python AI 服务的地址
+
+puretalk:
+  api:
+    token: puretalk-service-key-2026
