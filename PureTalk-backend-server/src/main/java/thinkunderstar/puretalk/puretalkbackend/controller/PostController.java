@@ -34,8 +34,23 @@ public class PostController {
     @GetMapping
     public Result getPosts(@RequestParam(defaultValue = "0") long categoryId,
                            @RequestParam(defaultValue = "1") int page,
-                           @RequestParam(defaultValue = "20") int size ){
-        return sysPostService.getPosts(categoryId,page,size);
+                           @RequestParam(defaultValue = "20") int size) {
+        return sysPostService.getPosts(categoryId, page, size);
+    }
+
+    /**
+     * 获得传入用户的所有帖子
+     *
+     * @param userId 传入用户的ID
+     * @param page 帖子页数
+     * @param size 一次返回的帖子
+     * @return 获取结果
+     */
+    @GetMapping("/{userId}/posts")
+    public Result getUserPosts(@PathVariable long userId,
+                               @RequestParam(defaultValue = "1") int page,
+                               @RequestParam(defaultValue = "20") int size) {
+        return sysPostService.getUserPosts(userId, page, size);
     }
 
     /**

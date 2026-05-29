@@ -1,5 +1,7 @@
 package thinkunderstar.puretalk.puretalkbackend.service;
 
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import thinkunderstar.puretalk.puretalkbackend.common.DoSendPost;
 import thinkunderstar.puretalk.puretalkbackend.common.Result;
 
@@ -69,4 +71,14 @@ public interface SysPostService {
      * @return 搜索结果
      */
     Result searchPosts(String str, long categoryId, int page, int size);
+
+    /**
+     * 获得传入用户的所有帖子
+     *
+     * @param userId 传入用户的ID
+     * @param page 帖子页数
+     * @param size 一次返回的帖子
+     * @return 获取结果
+     */
+    Result getUserPosts(long userId, int page, int size);
 }

@@ -322,4 +322,21 @@ public class SysPostServiceImpl implements SysPostService {
 
         return Result.success(pageVOResult);
     }
+
+    @Override
+    public Result getUserPosts(long userId, int page, int size) {
+        User user = userService.getById(userId);
+
+        if (user == null){
+            log.error("查询用户所有帖子:该用户不存在");
+            throw new BusinessException("该用户不存在");
+        }
+
+        Page<Post> postPage = new Page<>(page,size);
+        LambdaQueryWrapper<Post> postLambdaQueryWrapper =
+                new LambdaQueryWrapper<Post>().eq(Post::getUserId, userId).orderByDesc(Post::getCreateTime);
+
+        Page<Post> pageResult = postMapper.selectPage(postPage, postLambdaQueryWrapper);
+
+    }
 }
