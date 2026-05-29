@@ -1,6 +1,6 @@
 from langchain.agents import create_agent
 
-from puretalk_ai.core.tools_bean import search_posts_tool_bean, get_posts_tool_bean
+from puretalk_ai.core.tools_bean import search_posts_tool_bean, get_posts_tool_bean, get_user_posts_tool_bean
 from puretalk_ai.llm.deepseek import deepseek_llm
 from puretalk_ai.middlewares.root_system_prompt_middleware import root_system_prompt_middleware
 
@@ -10,6 +10,7 @@ root_agent = create_agent(
     tools=[
         search_posts_tool_bean,
         get_posts_tool_bean,
+        get_user_posts_tool_bean,
     ],
     middleware=[root_system_prompt_middleware],
     system_prompt= f"""

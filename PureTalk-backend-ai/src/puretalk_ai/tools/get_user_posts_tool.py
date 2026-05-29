@@ -7,17 +7,17 @@ from pydantic import Field,BaseModel
 from puretalk_ai.config.settings import JAVA_BACKEND_URL, SERVICE_API_KEY
 from puretalk_ai.core.contextvars import current_user_id
 
-class GetPostsModel(BaseModel):
-    category_id: int = Field(0,description="排序方式：0=综合排序，1=最热排序，2=最新排序。默认综合排序。")
+
+class GetUserPostsModel(BaseModel):
     page: int = Field(1,description="页码")
     size: int = Field(10,description="每页数量")
 
-class GetPostsTool(BaseTool):
-    name : str = "get_posts_tool"
-    description : str = "按照规定的排序获取帖子"
-    args_schema : Type[BaseModel] = GetPostsModel
+class GetUserPostsTool(BaseTool):
+    name : str = "get_user_posts_tool"
+    description : str = "按照从新到老的顺序获取用户自己的所有的帖子"
+    args_schema : Type[BaseModel] = GetUserPostsModel
 
-    def _run(self,  category_id: int, page: int, size: int) -> str:
+    def _run(self, page: int, size: int) -> str:
         #设置请求头
         headers = {
             "X-Service-Token": SERVICE_API_KEY,
@@ -26,24 +26,23 @@ class GetPostsTool(BaseTool):
 
         # 发送HTTP请求，并解析响应
         response = httpx.get(
-            f"{JAVA_BACKEND_URL}/api/post",
+            f"{JAVA_BACKEND_URL}/api/post/{current_user_id.get()}/posts",
             params={
-                "categoryId": category_id,
                 "page": page,
-                "size": size
+                "size": size,
             },
             headers=headers,
         )
 
         if response.status_code != 200:
-            return f"获取帖子列表异常，HTTP状态码：{response.status_code}"
+            return f"获取用户帖子列表异常，HTTP状态码：{response.status_code}"
 
         result = response.json()
 
         if result.get("code") != 200:
             return f"获取失败：{result.get('message', '未知错误')}"
 
-        data = result.get("data", {})
+        data = result.get("data", {}).get("posts",{})
 
         # 格式化结果
         total = data.get("total", 0)
@@ -66,7 +65,7 @@ class GetPostsTool(BaseTool):
                 else:
                     content = post["content"]
 
-            line += (f"【{post['id']}】{post['title']}\n作者: {post['userName']} "
+            line += (f"【{post['id']}】{post['title']}\n "
                      f"| 发布于 {post['createTime']}\n浏览: {post['viewCount']} "
                      f"| 赞: {post['likeCount']} "
                      f"| 评论: {post['commentCount']}\n摘要: {content}\n\n")

@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import thinkunderstar.puretalk.puretalkbackend.common.DoGetUserPosts;
 import thinkunderstar.puretalk.puretalkbackend.common.DoSendPost;
 import thinkunderstar.puretalk.puretalkbackend.common.PostVO;
 import thinkunderstar.puretalk.puretalkbackend.common.Result;
@@ -338,5 +339,12 @@ public class SysPostServiceImpl implements SysPostService {
 
         Page<Post> pageResult = postMapper.selectPage(postPage, postLambdaQueryWrapper);
 
+        //封装返回对象
+        DoGetUserPosts doGetUserPosts = new DoGetUserPosts();
+        doGetUserPosts.setUserName(user.getUsername());
+        doGetUserPosts.setAvatar(user.getAvatar());
+        doGetUserPosts.setPosts(pageResult);
+
+        return Result.success(doGetUserPosts);
     }
 }
