@@ -29,10 +29,10 @@ public class FeedbackController {
      */
     @GetMapping
     @SaCheckLogin
-    @SaCheckRole(value = {"admin","root"},mode = SaMode.OR)
+    @SaCheckRole(value = {"admin", "root"}, mode = SaMode.OR)
     public Result getFeedbacks(@RequestParam(defaultValue = "1") int page,
-                               @RequestParam(defaultValue = "20") int size){
-        return sysFeedbackService.getFeedbacks(page,size);
+                               @RequestParam(defaultValue = "20") int size) {
+        return sysFeedbackService.getFeedbacks(page, size);
     }
 
     /**
@@ -42,7 +42,7 @@ public class FeedbackController {
      * @return 提交结果
      */
     @PostMapping("/send")
-    public Result sendFeedback(@RequestBody DoFeedback doFeedback){
+    public Result sendFeedback(@RequestBody DoFeedback doFeedback) {
         return sysFeedbackService.sendFeedback(doFeedback);
     }
 
@@ -54,8 +54,8 @@ public class FeedbackController {
      */
     @PutMapping("/handle")
     @SaCheckLogin
-    @SaCheckRole(value = {"admin","root"},mode = SaMode.OR)
-    public Result handleFeedback(@RequestBody DoHandleFeedback doHandleFeedback){
+    @SaCheckRole(value = {"admin", "root"}, mode = SaMode.OR)
+    public Result handleFeedback(@RequestBody DoHandleFeedback doHandleFeedback) {
         return sysFeedbackService.handleFeedback(doHandleFeedback);
     }
 
@@ -64,7 +64,7 @@ public class FeedbackController {
      */
     @Scheduled(cron = "0 0 0 1 1 ?")     // 每年1月1日零点
     @Async
-    public void clearHandledFeedback(){
-
+    public void clearHandledFeedback() {
+        sysFeedbackService.clearHandledFeedback();
     }
 }

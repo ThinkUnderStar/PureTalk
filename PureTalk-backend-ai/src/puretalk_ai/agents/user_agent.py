@@ -1,6 +1,7 @@
 from langchain.agents import create_agent
 
-from puretalk_ai.core.tools_bean import search_posts_tool_bean, get_posts_tool_bean, get_user_posts_tool_bean
+from puretalk_ai.core.tools_bean import search_posts_tool_bean, get_posts_tool_bean, get_user_posts_tool_bean, \
+    get_post_comments_tool_bean, get_notifications_tool_bean, get_notification_target_tool_bean
 from puretalk_ai.llm.deepseek import deepseek_llm
 from puretalk_ai.middlewares.user_system_prompt_middleware import user_system_prompt_middleware
 
@@ -11,6 +12,9 @@ user_agent = create_agent(
         search_posts_tool_bean,
         get_posts_tool_bean,
         get_user_posts_tool_bean,
+        get_post_comments_tool_bean,
+        get_notifications_tool_bean,
+        get_notification_target_tool_bean,
     ],
     middleware=[user_system_prompt_middleware],
     system_prompt=f"""

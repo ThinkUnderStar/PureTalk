@@ -16,16 +16,14 @@ public class NotificationAPI {
     /**
      * 用户获取通知
      *
-     * @param userId 用户id
      * @param page 页数
      * @param size 一次性返回的数量
      * @return 获取结果
      */
     @GetMapping
-    public Result getNotifications(@RequestParam long userId,
-                                   @RequestParam(defaultValue = "1") int page,
+    public Result getNotifications(@RequestParam(defaultValue = "1") int page,
                                    @RequestParam(defaultValue = "20") int size){
-        return sysNotificationService.getNotifications(userId,page,size);
+        return sysNotificationService.getNotifications(page,size);
     }
 
     /**

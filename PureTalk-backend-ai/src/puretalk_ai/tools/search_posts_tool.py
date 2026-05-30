@@ -1,3 +1,4 @@
+import asyncio
 from typing import Type
 
 import httpx
@@ -6,7 +7,6 @@ from pydantic import Field,BaseModel
 
 from puretalk_ai.config.settings import JAVA_BACKEND_URL, SERVICE_API_KEY
 from puretalk_ai.core.contextvars import current_user_id
-
 
 class SearchPostsModel(BaseModel):
     keyword: str = Field(...,description="要搜索的关键词")
@@ -47,6 +47,8 @@ class SearchPostsTool(BaseTool):
             return f"搜索失败：{result.get('message', '未知错误')}"
 
         data = result.get("data", {})
+        if data is None:
+            return "查询结果为空"
 
         # 格式化结果
         total = data.get("total", 0)
@@ -75,3 +77,6 @@ class SearchPostsTool(BaseTool):
                      f"| 评论: {post['commentCount']}\n摘要: {content}\n\n")
 
         return header + line
+
+    async def _arun(self, keyword: str, category_id: int, page: int, size: int) -> str:
+        return await asyncio.to_thread(self._run, keyword, category_id, page, size)

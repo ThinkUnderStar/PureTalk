@@ -1,3 +1,4 @@
+import asyncio
 from typing import Type
 
 import httpx
@@ -44,6 +45,8 @@ class GetPostsTool(BaseTool):
             return f"获取失败：{result.get('message', '未知错误')}"
 
         data = result.get("data", {})
+        if data is None:
+            return "获取结果为空"
 
         # 格式化结果
         total = data.get("total", 0)
@@ -72,3 +75,6 @@ class GetPostsTool(BaseTool):
                      f"| 评论: {post['commentCount']}\n摘要: {content}\n\n")
 
         return header + line
+
+    async def _arun(self,  category_id: int, page: int, size: int) -> str:
+        return await asyncio.to_thread(self._run, category_id, page, size)

@@ -20,7 +20,7 @@ public class ServiceAuthInterceptor implements HandlerInterceptor {
                              Object handler) {
 
         // 只拦截需要保护的接口（比如搜索）
-        String path = request.getRequestURI();
+        String path = request.getServletPath();
         if (!path.startsWith("/api")) {
             return true;
         }
@@ -29,7 +29,7 @@ public class ServiceAuthInterceptor implements HandlerInterceptor {
         String token = request.getHeader("X-Service-Token");
         long userId = Long.parseLong(request.getHeader("X-User-Id"));
         if (apiToken.equals(token)) {
-            StpUtil.login(userId);
+            StpUtil.login(userId,false);
             return true;
         }
 

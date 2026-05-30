@@ -1,5 +1,6 @@
 package thinkunderstar.puretalk.puretalkbackend.service.impl;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.springframework.stereotype.Service;
@@ -29,12 +30,12 @@ public class SysNotificationServiceImpl implements SysNotificationService {
     }
 
     @Override
-    public Result getNotifications(long userId, int page, int size) {
+    public Result getNotifications(int page, int size) {
         Page<Notification> notificationPage = new Page<>(page,size);
 
         Page<Notification> pageResult = notificationMapper.selectPage(notificationPage,
                 new LambdaQueryWrapper<Notification>()
-                        .eq(Notification::getUserId, userId)
+                        .eq(Notification::getUserId, StpUtil.getLoginIdAsLong())
                         .orderByDesc(Notification::getCreateTime));
 
         return Result.success(pageResult);
