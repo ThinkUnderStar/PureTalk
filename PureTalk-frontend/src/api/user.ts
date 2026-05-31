@@ -81,7 +81,9 @@ export const userApi = {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
   // 更新用户信息
-  update: (data: DoUpdate) => axios.put<Result>('/user/update', data)
+  update: (data: DoUpdate) => axios.put<Result>('/user/update', data),
+  // 获取用户信息
+  getUserInfo: (userId: number) => axios.get<Result>(`/user/info?userId=${userId}`)
 }
 
 export const adminApi = {

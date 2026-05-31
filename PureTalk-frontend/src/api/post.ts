@@ -11,7 +11,7 @@ export interface Post {
   title: string
   content: string
   userId: number
-  username: string
+  userName: string
   avatar: string
   likeCount: number
   viewCount: number
@@ -31,6 +31,9 @@ export const postApi = {
   // 获取帖子列表
   getPosts: (categoryId: number = 0, page: number = 1, size: number = 20) => 
     axios.get<Result<PostPageResult>>('/post', { params: { categoryId, page, size } }),
+  // 获取用户帖子
+  getUserPosts: (userId: number, page: number = 1, size: number = 20) =>
+    axios.get<Result<PostPageResult>>(`/post/${userId}/posts`, { params: { page, size } }),
   // 搜索帖子
   searchPosts: (keyword: string, categoryId: number = 0, page: number = 1, size: number = 20) => 
     axios.get<Result<PostPageResult>>('/post/search', { params: { str: keyword, categoryId, page, size } }),

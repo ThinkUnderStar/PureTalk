@@ -2,9 +2,9 @@
   <div class="user-profile">
     <header class="header">
       <button class="back-btn" @click="goBack">← 返回</button>
-      <h1>PureTalk</h1>
+      <h1>{{ isOwnProfile ? '我的主页' : `${userInfo.userName}的主页` }}</h1>
       <div class="header-actions">
-        <button class="logout-btn" @click="handleLogout">登出</button>
+        <button v-if="isOwnProfile" class="logout-btn" @click="handleLogout">登出</button>
       </div>
     </header>
 
@@ -13,17 +13,18 @@
         <div class="profile-header">
           <div class="avatar-wrapper">
             <img
-              :src="avatar || 'https://ui-avatars.com/api/?name=' + userInfo.username + '&background=random&size=128'"
-              :alt="userInfo.username"
+              :src="avatar || 'https://ui-avatars.com/api/?name=' + userInfo.userName + '&background=random&size=128'"
+              :alt="userInfo.userName"
               class="profile-avatar"
               @click="viewFullAvatar"
             />
           </div>
-          <h2>{{ userInfo.username }}</h2>
-          <button class="change-avatar-btn" @click="triggerAvatarUpload">
+          <h2>{{ userInfo.userName }}</h2>
+          <button v-if="isOwnProfile" class="change-avatar-btn" @click="triggerAvatarUpload">
             更改头像
           </button>
           <input
+            v-if="isOwnProfile"
             type="file"
             ref="avatarInput"
             accept="image/*"
@@ -33,22 +34,13 @@
           <div v-if="uploadingAvatar" class="avatar-uploading">上传中...</div>
         </div>
 
-        <div class="profile-stats">
-          <div class="stat-item">
-            <span class="stat-value">{{ userInfo.likeCount || 0 }}</span>
-            <span class="stat-label">获赞</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ userInfo.postCount || 0 }}</span>
-            <span class="stat-label">帖子</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ userInfo.commentCount || 0 }}</span>
-            <span class="stat-label">评论</span>
-          </div>
-        </div>
+        <button class="menu-item" @click="goToUserPosts()">
+          <span class="menu-icon">📝</span>
+          <span class="menu-text">{{ isOwnProfile ? '查看我的帖子' : '查看帖子' }}</span>
+          <span class="menu-arrow">›</span>
+        </button>
 
-        <div class="profile-menu">
+        <div v-if="isOwnProfile" class="profile-menu">
           <button class="menu-item" @click="showEditForm = true">
             <span class="menu-icon">✏️</span>
             <span class="menu-text">修改信息</span>
@@ -66,7 +58,7 @@
           </router-link>
         </div>
 
-        <div v-if="showEditForm" class="edit-section">
+        <div v-if="showEditForm && isOwnProfile" class="edit-section">
           <h3>修改个人信息</h3>
           <div class="profile-form">
             <div class="form-group">
@@ -126,9 +118,58 @@
           </div>
         </div>
 
-        <div class="danger-zone">
+        <div v-if="isOwnProfile" class="danger-zone">
           <h3>危险操作</h3>
           <button class="delete-btn" @click="confirmDelete">删除账户</button>
+        </div>
+      </div>
+
+      <div v-if="showPosts" class="posts-section">
+        <div class="posts-header">
+          <h3>{{ isOwnProfile ? '我的帖子' : `${userInfo.userName}的帖子` }}</h3>
+          <button class="close-posts-btn" @click="showPosts = false">关闭</button>
+        </div>
+        <div class="posts-list">
+          <div
+            v-for="post in userPosts"
+            :key="post.id"
+            class="post-item"
+            @click="goToPostDetail(post.id)"
+          >
+            <h4 class="post-title">{{ post.title }}</h4>
+            <p class="post-content">{{ post.content }}</p>
+            <div class="post-meta">
+              <span class="post-time">{{ post.createTime }}</span>
+              <button
+                v-if="isOwnProfile"
+                class="delete-btn"
+                @click.stop="deletePost(post.id)"
+              >
+                删除
+              </button>
+            </div>
+            <div class="post-stats">
+              <span class="stat-item">
+                <span class="stat-icon iconfont icon-dianzan"></span>
+                <span>{{ post.likeCount }}</span>
+              </span>
+              <span class="stat-item">
+                <span class="stat-icon iconfont icon-liulan"></span>
+                <span>{{ post.viewCount }}</span>
+              </span>
+              <span class="stat-item">
+                <span class="stat-icon iconfont icon-pinglun"></span>
+                <span>{{ post.commentCount }}</span>
+              </span>
+            </div>
+          </div>
+          <div v-if="loadingPosts" class="loading">
+            <div class="loading-spinner"></div>
+            <p>加载中...</p>
+          </div>
+          <div v-if="!loadingPosts && userPosts.length === 0" class="no-posts">
+            暂无帖子
+          </div>
         </div>
       </div>
     </main>
@@ -136,21 +177,24 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { userApi } from '@/api/user'
+import { postApi, Post } from '@/api/post'
 
 const router = useRouter()
+const route = useRoute()
 const loading = ref<boolean>(false)
 const showEditForm = ref<boolean>(false)
 const avatar = ref<string>('')
 const uploadingAvatar = ref<boolean>(false)
 const avatarInput = ref<HTMLInputElement | null>(null)
 const userInfo = ref({
-  username: '',
+  userName: '',
   likeCount: 0,
   postCount: 0,
-  commentCount: 0
+  commentCount: 0,
+  userId: 0
 })
 const form = ref({
   username: '',
@@ -165,9 +209,23 @@ const errors = ref({
   password: ''
 })
 
+const isOwnProfile = computed(() => {
+  const routeUserId = Number(route.params.userId)
+  const currentUserId = Number(localStorage.getItem('userId') || '0')
+  return !route.params.userId || routeUserId === currentUserId
+})
+
 const viewFullAvatar = () => {
   if (avatar.value) {
     window.open(avatar.value, '_blank')
+  }
+}
+
+const goToUserPosts = () => {
+  if (isOwnProfile.value) {
+    router.push('/user/posts')
+  } else {
+    router.push(`/user/${route.params.userId}/posts`)
   }
 }
 
@@ -244,9 +302,28 @@ const validateForm = (): boolean => {
   return isValid
 }
 
-onMounted(() => {
-  userInfo.value.username = localStorage.getItem('username') || ''
-  avatar.value = localStorage.getItem('avatar') || ''
+onMounted(async () => {
+  if (isOwnProfile.value) {
+    userInfo.value.userName = localStorage.getItem('username') || ''
+    avatar.value = localStorage.getItem('avatar') || ''
+    userInfo.value.userId = Number(localStorage.getItem('userId') || '0')
+  } else {
+    const userId = Number(route.params.userId)
+    userInfo.value.userId = userId
+    try {
+      const response = await userApi.getUserInfo(userId)
+      const data = response as any
+      if (data.code === 200) {
+        userInfo.value.userName = data.data.userName || `用户${userId}`
+        avatar.value = data.data.avatar || ''
+      } else {
+        userInfo.value.userName = `用户${userId}`
+      }
+    } catch (error) {
+      console.error('获取用户信息失败:', error)
+      userInfo.value.userName = `用户${userId}`
+    }
+  }
 })
 
 const handleUpdate = async () => {
@@ -691,6 +768,162 @@ const goBack = () => {
   border-color: transparent;
   transform: translateY(-1px);
   box-shadow: 0 3px 12px rgba(231, 76, 60, 0.35);
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.cursor-pointer:hover {
+  opacity: 0.8;
+}
+
+.posts-section {
+  margin-top: 1.25rem;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  box-shadow: 0 8px 28px rgba(102, 126, 234, 0.18);
+  padding: 1.5rem;
+}
+
+.posts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1.5px solid rgba(102, 126, 234, 0.12);
+}
+
+.posts-header h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+.close-posts-btn {
+  padding: 0.4rem 0.8rem;
+  border: 1.5px solid rgba(102, 126, 234, 0.4);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #667eea;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
+}
+
+.close-posts-btn:hover {
+  background: rgba(102, 126, 234, 0.1);
+}
+
+.posts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.posts-list .post-item {
+  padding: 1rem;
+  background: rgba(102, 126, 234, 0.04);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.posts-list .post-item:hover {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.08));
+  transform: translateX(4px);
+}
+
+.posts-list .post-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 0.5rem 0;
+}
+
+.posts-list .post-content {
+  font-size: 0.92rem;
+  color: #666;
+  margin: 0 0 0.75rem 0;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.posts-list .post-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.posts-list .post-time {
+  font-size: 0.82rem;
+  color: #999;
+}
+
+.posts-list .post-meta .delete-btn {
+  width: auto;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.posts-list .post-stats {
+  display: flex;
+  gap: 1.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+.posts-list .post-stats .stat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.posts-list .post-stats .stat-icon {
+  font-size: 0.9rem;
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem;
+  color: #667eea;
+}
+
+.loading-spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid rgba(102, 126, 234, 0.2);
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading p {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.9rem;
+}
+
+.no-posts {
+  text-align: center;
+  color: #999;
+  padding: 2rem;
+  font-size: 0.95rem;
 }
 
 @media (max-width: 768px) {

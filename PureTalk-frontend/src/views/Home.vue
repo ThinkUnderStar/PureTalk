@@ -91,30 +91,30 @@
           <h2 class="post-title">{{ post.title }}</h2>
           <p class="post-content">{{ post.content }}</p>
           <div class="post-meta">
-            <span class="post-author">{{ post.username }}</span>
-            <span class="post-time">{{ post.createTime }}</span>
+            <div class="post-meta-left">
+              <img 
+                :src="post.avatar || 'https://ui-avatars.com/api/?name=' + post.userName + '&background=random&size=48'" 
+                :alt="post.userName" 
+                class="post-avatar"
+                @click.stop="goToUserProfile(post.userId)"
+              />
+              <span 
+                class="post-author cursor-pointer" 
+                @click.stop="goToUserProfile(post.userId)"
+              >
+                {{ post.userName }}
+              </span>
+              <span class="post-separator">·</span>
+              <span class="post-time">{{ post.createTime }}</span>
+            </div>
             <button 
               v-if="isLoggedIn && post.userId === currentUserId" 
               class="delete-btn"
-              @click="deletePost(post.id)"
+              @click.stop="deletePost(post.id)"
             >
               删除
             </button>
           </div>
-          <div class="post-stats">
-              <span class="stat-item">
-                <span class="stat-icon iconfont icon-dianzan"></span>
-                <span>{{ post.likeCount }}</span>
-              </span>
-              <span class="stat-item">
-                <span class="stat-icon iconfont icon-liulan"></span>
-                <span>{{ post.viewCount }}</span>
-              </span>
-              <span class="stat-item">
-                <span class="stat-icon iconfont icon-pinglun"></span>
-                <span>{{ post.commentCount }}</span>
-              </span>
-            </div>
           </div>
         
         <div v-if="loading" class="loading">
@@ -236,6 +236,14 @@ const switchCategory = (category: string) => {
   posts.value = []
   hasMore.value = true
   loadPosts()
+}
+
+const goToUserProfile = (userId: number) => {
+  if (userId === currentUserId.value) {
+    router.push('/user/profile')
+  } else {
+    router.push(`/user/${userId}`)
+  }
 }
 
 const handleSearch = () => {
@@ -644,9 +652,28 @@ onMounted(() => {
   color: #999;
 }
 
+.post-meta-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.post-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  cursor: pointer;
+}
+
 .post-author {
   font-weight: 500;
   color: #666;
+}
+
+.post-separator {
+  margin: 0 0.5rem;
+  color: #ccc;
 }
 
 .post-stats {
@@ -658,10 +685,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.3rem;
-}
-
-.stat-icon {
-  font-size: 1rem;
 }
 
 .loading {

@@ -28,12 +28,13 @@
         <div class="post-meta">
           <div class="post-meta-left">
             <img 
-              :src="post.avatar || 'https://ui-avatars.com/api/?name=' + post.username + '&background=random'" 
-              :alt="post.username" 
-              class="post-avatar"
+              :src="post.avatar || 'https://ui-avatars.com/api/?name=' + post.userName + '&background=random'" 
+              :alt="post.userName" 
+              class="post-avatar cursor-pointer"
+              @click="goToUserProfile(post.userId)"
             />
             <div class="post-meta-info">
-              <span class="post-author">{{ post.username }}</span>
+              <span class="post-author cursor-pointer" @click="goToUserProfile(post.userId)">{{ post.userName }}</span>
               <span class="post-time">{{ formatTime(post.createTime) }}</span>
             </div>
           </div>
@@ -96,16 +97,17 @@
             v-for="comment in comments" 
             :key="comment.id" 
             class="comment-item"
-            @click="showReplyInput(comment.id, comment.username)"
+            @click="showReplyInput(comment.id, comment.userName)"
           >
             <div class="comment-header">
               <img 
-                :src="comment.avatar || 'https://ui-avatars.com/api/?name=' + comment.username + '&background=random'" 
-                :alt="comment.username" 
-                class="comment-avatar"
+                :src="comment.avatar || 'https://ui-avatars.com/api/?name=' + comment.userName + '&background=random'" 
+                :alt="comment.userName" 
+                class="comment-avatar cursor-pointer"
+                @click.stop="goToUserProfile(comment.userId)"
               />
               <div class="comment-header-info">
-                <span class="comment-author">{{ comment.username }}</span>
+                <span class="comment-author cursor-pointer" @click.stop="goToUserProfile(comment.userId)">{{ comment.userName }}</span>
                 <div class="comment-header-actions">
                   <span class="comment-time">{{ formatTime(comment.createTime) }}</span>
                   <button
@@ -129,7 +131,7 @@
                 <span class="like-icon">{{ comment.isLiked ? '❤️' : '👍' }}</span>
                 <span>{{ comment.likeCount }}</span>
               </span>
-              <span class="comment-reply-btn" @click.stop="showReplyInput(comment.id, comment.username)">
+              <span class="comment-reply-btn" @click.stop="showReplyInput(comment.id, comment.userName)">
                 回复
               </span>
             </div>
@@ -198,6 +200,14 @@ const username = ref<string>(localStorage.getItem('username') || '用户')
 const userAvatar = ref<string>(localStorage.getItem('avatar') || '')
 const commentListRef = ref<HTMLElement | null>(null)
 
+const goToUserProfile = (userId: number) => {
+  if (userId === currentUserId.value) {
+    router.push('/user/profile')
+  } else {
+    router.push(`/user/${userId}`)
+  }
+}
+
 const loadPost = async () => {
   loading.value = true
   try {
@@ -226,10 +236,21 @@ const loadComments = async () => {
   try {
     const response = await commentApi.getComments(postId.value, currentCommentPage.value, 20)
     const data = response as any
+    console.log('完整响应:', response)
+    console.log('数据字段:', data.data)
     if (data.code === 200) {
-      const newComments = data.data?.records || []
-      comments.value = currentCommentPage.value === 1 ? newComments : [...comments.value, ...newComments]
-      hasMoreComments.value = newComments.length === 20
+      const pageData = data.data || {}
+      console.log('pageData结构:', Object.keys(pageData))
+      const newComments = pageData.records || pageData.content || []
+      console.log('评论列表:', newComments)
+      console.log('第一个评论:', newComments[0])
+      const normalizedComments = newComments.map((comment: any) => ({
+        ...comment,
+        userName: comment.userName || comment.username || comment.user_name || '未知用户',
+        avatar: comment.avatar || comment.avatarUrl || null
+      }))
+      comments.value = currentCommentPage.value === 1 ? normalizedComments : [...comments.value, ...normalizedComments]
+      hasMoreComments.value = normalizedComments.length === 20
       currentCommentPage.value++
     }
   } catch (error) {
@@ -815,6 +836,11 @@ onMounted(() => {
   object-fit: cover;
 }
 
+.comment-avatar.cursor-pointer:hover {
+  opacity: 0.8;
+  transform: scale(1.05);
+}
+
 .comment-header-info {
   flex: 1;
   display: flex;
@@ -834,6 +860,11 @@ onMounted(() => {
   font-weight: 500;
   color: #333;
   font-size: 0.95rem;
+}
+
+.comment-author.cursor-pointer:hover {
+  color: #667eea;
+  text-decoration: underline;
 }
 
 .comment-time {

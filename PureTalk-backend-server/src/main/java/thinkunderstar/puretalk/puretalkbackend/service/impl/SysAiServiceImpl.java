@@ -4,8 +4,10 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.reactive.function.BodyExtractors;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import thinkunderstar.puretalk.puretalkbackend.common.DoPostMessage;
@@ -210,9 +212,18 @@ public class SysAiServiceImpl implements SysAiService {
         //向python端服务发送请求
         webClient.post()
                 .uri("/ai/chat/stream")
+                .accept(MediaType.TEXT_EVENT_STREAM)
                 .bodyValue(body)
                 .retrieve()
                 .bodyToFlux(String.class)
+                .filter(chunk -> chunk != null && !chunk.trim().isEmpty())
+                .map(chunk -> {
+                    String trimmed = chunk.trim();
+                    if (trimmed.startsWith("data:")) {
+                        return trimmed.substring(5).trim();
+                    }
+                    return trimmed;
+                })
                 .subscribe(
                         //处理每一块获得的数据
                         chunk->{

@@ -4,6 +4,7 @@ import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 import PostDetail from '../views/PostDetail.vue'
 import UserProfile from '../views/UserProfile.vue'
+import UserPosts from '../views/UserPosts.vue'
 import Admin from '../views/Admin.vue'
 import Feedback from '../views/Feedback.vue'
 import Report from '../views/Report.vue'
@@ -36,6 +37,21 @@ const routes = [
     path: '/user/profile',
     name: 'UserProfile',
     component: UserProfile
+  },
+  {
+    path: '/user/:userId',
+    name: 'OtherUserProfile',
+    component: UserProfile
+  },
+  {
+    path: '/user/posts',
+    name: 'MyPosts',
+    component: UserPosts
+  },
+  {
+    path: '/user/:userId/posts',
+    name: 'UserPosts',
+    component: UserPosts
   },
   {
     path: '/admin',

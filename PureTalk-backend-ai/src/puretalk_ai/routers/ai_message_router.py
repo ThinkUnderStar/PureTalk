@@ -48,8 +48,8 @@ async def chat_stream(do_chat: DoChat):
 
             #判断是否有content
             if hasattr(message, "content") and message.content:
-                #返回内容
-                yield message.content
+                #返回内容，添加SSE格式的data前缀
+                yield f"data: {message.content}\n\n"
 
     #StreamingResponse内部的__call__方法会循环调用event_stream
     return StreamingResponse(event_stream(), media_type="text/event-stream")

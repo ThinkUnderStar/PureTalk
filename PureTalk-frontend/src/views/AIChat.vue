@@ -5,7 +5,7 @@
         <span class="iconfont icon-fanhui"></span>
         <span class="back-text">返回</span>
       </button>
-      <h2>AI 助手</h2>
+      <h2>守言</h2>
       <div class="header-spacer"></div>
     </header>
 
@@ -33,7 +33,7 @@
         <div class="messages" ref="messagesContainer">
           <div v-if="messages.length === 0" class="empty-chat">
             <div class="empty-icon">🤖</div>
-            <p>开始和 AI 助手聊天吧！</p>
+            <p>开始和守言聊天吧！</p>
           </div>
           <div
             v-for="(msg, index) in messages"
@@ -52,16 +52,6 @@
             <div class="message-content">
               <div class="message-text" v-html="formatMessage(msg.content)"></div>
               <div class="message-time">{{ msg.createTime || '' }}</div>
-            </div>
-          </div>
-          <div v-if="isStreaming" class="message assistant streaming">
-            <div class="message-avatar">🤖</div>
-            <div class="message-content">
-              <div class="message-text typing">
-                <span class="dot">●</span>
-                <span class="dot">●</span>
-                <span class="dot">●</span>
-              </div>
             </div>
           </div>
         </div>
@@ -130,31 +120,54 @@ const loadSessions = async () => {
   }
 }
 
+interface BackgroundTask {
+  sessionId: number
+  abortController: AbortController
+  messages: AiMessage[]
+}
+
+const backgroundTasks = ref<Record<number, BackgroundTask>>({})
+const sessionMessagesCache = ref<Record<number, AiMessage[]>>({})
+
 const selectSession = async (sessionId: number) => {
+  if (isStreaming.value && currentSessionId.value !== 0 && currentSessionId.value !== sessionId) {
+    sessionMessagesCache.value[currentSessionId.value] = [...messages.value]
+    isStreaming.value = false
+  }
+  
   currentSessionId.value = sessionId
+  
+  if (sessionMessagesCache.value[sessionId]) {
+    messages.value = [...sessionMessagesCache.value[sessionId]]
+    delete sessionMessagesCache.value[sessionId]
+  } else {
+    messages.value = []
+  }
+  
   await loadMessages(sessionId)
+}
+
+const completeBackgroundTask = (sessionId: number, finalMessages: AiMessage[]) => {
+  if (backgroundTasks.value[sessionId]) {
+    delete backgroundTasks.value[sessionId]
+  }
+  
+  if (sessionId === currentSessionId.value) {
+    sessionMessagesCache.value[sessionId] = [...finalMessages]
+    loadMessages(sessionId)
+  } else {
+    sessionMessagesCache.value[sessionId] = [...finalMessages]
+  }
 }
 
 const parseAiContent = (content: string): string => {
   if (!content) return ''
   try {
-    if (content.includes('{"message":')) {
-      let result = ''
-      const jsonParts = content.split('}{')
-      jsonParts.forEach((part, index) => {
-        let jsonPart = part
-        if (index > 0) jsonPart = '{' + jsonPart
-        if (index < jsonParts.length - 1) jsonPart = jsonPart + '}'
-        try {
-          const obj = JSON.parse(jsonPart)
-          if (obj.message && obj.message.content) {
-            result += obj.message.content
-          }
-        } catch {
-          result += part
-        }
-      })
-      return result || content
+    const trimmed = content.trim()
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      const obj = JSON.parse(trimmed)
+      if (obj.content) return obj.content
+      if (obj.message && obj.message.content) return obj.message.content
     }
     return content
   } catch {
@@ -162,15 +175,50 @@ const parseAiContent = (content: string): string => {
   }
 }
 
-const loadMessages = async (sessionId: number) => {
+const parseStreamingChunk = (chunk: string): string => {
+  if (!chunk) return ''
+  try {
+    const trimmed = chunk.trim()
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      const obj = JSON.parse(trimmed)
+      if (obj.content) return obj.content
+      if (obj.message && obj.message.content) return obj.message.content
+    }
+    return chunk
+  } catch {
+    return chunk
+  }
+}
+
+const loadMessages = async (sessionId: number, skipCache = false) => {
   try {
     const response = await aiApi.getMessages(sessionId, 1, 100)
     const data = response as any
     if (data.code === 200) {
-      messages.value = data.data.records.reverse().map((msg: any) => ({
+      const serverMessages = data.data.records.reverse().map((msg: any) => ({
         ...msg,
         content: msg.role === 'assistant' ? parseAiContent(msg.content) : msg.content
       }))
+      
+      if (!skipCache && messages.value.length > 0) {
+        const localUserMessages = messages.value.filter(m => m.role === 'user')
+        const serverUserMessages = serverMessages.filter(m => m.role === 'user')
+        const newUserMessages = localUserMessages.filter(lm => 
+          !serverUserMessages.some(sm => sm.content === lm.content && sm.createTime === lm.createTime)
+        )
+        
+        const lastLocalMsg = messages.value[messages.value.length - 1]
+        const hasIncompleteAssistant = lastLocalMsg && lastLocalMsg.role === 'assistant'
+        
+        messages.value = [...serverMessages, ...newUserMessages]
+        
+        if (hasIncompleteAssistant) {
+          messages.value.push(lastLocalMsg)
+        }
+      } else {
+        messages.value = serverMessages
+      }
+      
       scrollToBottom()
     }
   } catch (error) {
@@ -206,86 +254,131 @@ const sendMessage = async () => {
   const messageText = inputMessage.value.trim()
   inputMessage.value = ''
   isStreaming.value = true
+  const requestStartTime = Date.now()
 
-  messages.value.push({
+  const localAbortController = new AbortController()
+  const originalSessionId = currentSessionId.value
+  const localMessages: AiMessage[] = [...messages.value]
+  
+  localMessages.push({
     id: Date.now(),
-    sessionId: currentSessionId.value,
+    sessionId: originalSessionId,
     role: 'user',
     content: messageText,
     createTime: new Date().toLocaleString()
   })
+  
+  messages.value = [...localMessages]
   scrollToBottom()
 
-  try {
-    const token = localStorage.getItem('token')
-    console.log('Sending message:', { sessionId: currentSessionId.value, message: messageText })
-    
-    const response = await fetch('/api/ai/sessions/messages/post', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'satoken': token || ''
-      },
-      body: JSON.stringify({
-        sessionId: currentSessionId.value,
-        message: messageText
-      })
-    })
+  const taskKey = originalSessionId || Date.now()
+  backgroundTasks.value[taskKey] = {
+    sessionId: originalSessionId,
+    abortController: localAbortController,
+    messages: localMessages
+  }
 
-    console.log('Response status:', response.status, response.statusText)
-
-    if (!response.ok) {
-      throw new Error('请求失败: ' + response.statusText)
+  const timeoutId = setTimeout(() => {
+    if (isStreaming.value && Date.now() - requestStartTime > 30000) {
+      localAbortController.abort()
+      console.warn('请求超时，已自动取消')
+      if (currentSessionId.value === originalSessionId || originalSessionId === 0) {
+        alert('请求超时，请重试')
+      }
     }
+  }, 30000)
 
-    const reader = response.body?.getReader()
-    if (!reader) {
-      throw new Error('无法读取响应流')
-    }
-
+  const processStream = async () => {
     let fullContent = ''
     let buffer = ''
-    console.log('Starting SSE stream reading...')
+    let currentSession = originalSessionId
+    let taskMessages = [...localMessages]
+    let isFirstChunk = true
 
-    while (true) {
-      const { done, value } = await reader.read()
+    try {
+      const token = localStorage.getItem('token')
       
-      if (done) {
-        console.log('SSE stream done, full content:', fullContent)
-        break
+      const response = await fetch('/api/ai/sessions/messages/post', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'satoken': token || ''
+        },
+        body: JSON.stringify({
+          sessionId: originalSessionId,
+          message: messageText
+        }),
+        signal: localAbortController.signal
+      })
+
+      if (!response.ok) {
+        throw new Error('请求失败: ' + response.statusText)
       }
 
-      const chunk = new TextDecoder().decode(value, { stream: true })
-      console.log('Received raw chunk:', chunk)
-      
-      buffer += chunk
-      
-      while (buffer.includes('\n')) {
-        const lineEnd = buffer.indexOf('\n')
-        const line = buffer.substring(0, lineEnd)
-        buffer = buffer.substring(lineEnd + 1)
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new Error('无法读取响应流')
+      }
+
+      while (true) {
+        const { done, value } = await reader.read()
         
-        console.log('Processing line:', line)
-        
-        if (line.startsWith('event: ')) {
-          const eventName = line.substring(7).trim()
-          console.log('Event name:', eventName)
-          continue
+        if (done) {
+          if (buffer.trim()) {
+            const textContent = buffer.replace(/event:\s*session\s*/gi, '').replace(/data:\s*/g, '').trim()
+            if (textContent) {
+              const parsedContent = parseStreamingChunk(textContent)
+              if (parsedContent) {
+                fullContent += parsedContent
+              }
+            }
+          }
+          
+          if (fullContent) {
+            let lastMsg = taskMessages[taskMessages.length - 1]
+            if (lastMsg && lastMsg.role === 'user') {
+              taskMessages.push({
+                id: Date.now() + 1,
+                sessionId: currentSession,
+                role: 'assistant',
+                content: fullContent,
+                createTime: new Date().toLocaleString()
+              })
+            } else if (lastMsg && lastMsg.role === 'assistant') {
+              lastMsg.content = fullContent
+              lastMsg.createTime = new Date().toLocaleString()
+            }
+          }
+          
+          completeBackgroundTask(currentSession, taskMessages)
+          return
         }
+
+        const chunk = new TextDecoder().decode(value, { stream: true })
+        buffer += chunk
         
-        if (line.startsWith('data: ')) {
-          const dataContent = line.substring(6).trim()
-          console.log('Data content:', dataContent)
+        while (true) {
+          const combinedMatch = buffer.match(/(?:event:\s*session\s*)?data:\s*([^\r\n]+)/i)
+          if (!combinedMatch) break
+          
+          const dataContent = combinedMatch[1].trim()
+          buffer = buffer.substring(combinedMatch.index + combinedMatch[0].length)
           
           if (!dataContent) continue
           
-          fullContent += dataContent
+          if (!isNaN(parseInt(dataContent)) && currentSession === 0) {
+            currentSession = parseInt(dataContent)
+            continue
+          }
           
-          let lastMsg = messages.value[messages.value.length - 1]
+          const parsedContent = parseStreamingChunk(dataContent)
+          fullContent += parsedContent
+          
+          let lastMsg = taskMessages[taskMessages.length - 1]
           if (lastMsg && lastMsg.role === 'user') {
-            messages.value.push({
+            taskMessages.push({
               id: Date.now() + 1,
-              sessionId: currentSessionId.value,
+              sessionId: currentSession,
               role: 'assistant',
               content: fullContent,
               createTime: new Date().toLocaleString()
@@ -294,19 +387,35 @@ const sendMessage = async () => {
             lastMsg.content = fullContent
             lastMsg.createTime = new Date().toLocaleString()
           }
-          scrollToBottom()
-        } else if (line.startsWith('id: ')) {
-          continue
+          
+          if (currentSession === currentSessionId.value) {
+            messages.value = [...taskMessages]
+            scrollToBottom()
+          }
+          
+          isFirstChunk = false
         }
       }
-    }
 
-  } catch (error: any) {
-    console.error('发送消息失败:', error)
-    alert('发送消息失败: ' + (error.message || '未知错误'))
-  } finally {
-    isStreaming.value = false
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log('请求已取消')
+      } else {
+        console.error('发送消息失败:', error)
+        if (currentSession === currentSessionId.value) {
+          alert('发送消息失败: ' + (error.message || '未知错误'))
+        }
+      }
+    } finally {
+      clearTimeout(timeoutId)
+      if (currentSession === currentSessionId.value) {
+        isStreaming.value = false
+      }
+      delete backgroundTasks.value[taskKey]
+    }
   }
+
+  processStream().catch(console.error)
 }
 
 const scrollToBottom = () => {
@@ -325,9 +434,28 @@ const formatMessage = (content: string) => {
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
 }
 
-onMounted(() => {
+const initializeChat = async () => {
   loadUserInfo()
-  loadSessions()
+  await loadSessions()
+  
+  if (sessions.value.length > 0) {
+    const latestSession = sessions.value[0]
+    currentSessionId.value = latestSession.id
+    await loadMessages(latestSession.id)
+  }
+  
+  const cacheKeys = Object.keys(sessionMessagesCache.value)
+  if (cacheKeys.length > 0) {
+    const firstKey = parseInt(cacheKeys[0])
+    if (firstKey === currentSessionId.value) {
+      messages.value = [...sessionMessagesCache.value[firstKey]]
+      delete sessionMessagesCache.value[firstKey]
+    }
+  }
+}
+
+onMounted(() => {
+  initializeChat()
 })
 </script>
 
