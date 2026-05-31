@@ -25,6 +25,7 @@ public class SaTokenConfigure implements WebMvcConfigurer {
                         "/user/login/code",
                         "/admin/login",
                         "/post/search",
+                        "/user/logout",
                         "/api/**"
                 );
 

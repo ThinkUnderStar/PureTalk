@@ -5,7 +5,7 @@
         <span class="iconfont icon-fanhui"></span>
         <span class="back-text">返回</span>
       </button>
-      <h2>AI 陪聊</h2>
+      <h2>AI 助手</h2>
       <div class="header-spacer"></div>
     </header>
 
@@ -219,6 +219,7 @@ const sendMessage = async () => {
   try {
     const token = localStorage.getItem('token')
     console.log('Sending message:', { sessionId: currentSessionId.value, message: messageText })
+    
     const response = await fetch('/api/ai/sessions/messages/post', {
       method: 'POST',
       headers: {
@@ -234,7 +235,7 @@ const sendMessage = async () => {
     console.log('Response status:', response.status, response.statusText)
 
     if (!response.ok) {
-      throw new Error('请求失败')
+      throw new Error('请求失败: ' + response.statusText)
     }
 
     const reader = response.body?.getReader()
@@ -244,78 +245,63 @@ const sendMessage = async () => {
 
     let fullContent = ''
     let buffer = ''
-    let currentEvent = ''
     console.log('Starting SSE stream reading...')
 
     while (true) {
       const { done, value } = await reader.read()
+      
       if (done) {
         console.log('SSE stream done, full content:', fullContent)
         break
       }
 
       const chunk = new TextDecoder().decode(value, { stream: true })
-      console.log('Received chunk:', chunk)
+      console.log('Received raw chunk:', chunk)
       
       buffer += chunk
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
+      
+      while (buffer.includes('\n')) {
+        const lineEnd = buffer.indexOf('\n')
+        const line = buffer.substring(0, lineEnd)
+        buffer = buffer.substring(lineEnd + 1)
+        
         console.log('Processing line:', line)
-        if (line.startsWith('event:')) {
-          currentEvent = line.slice(6).trim()
-          console.log('Current event:', currentEvent)
+        
+        if (line.startsWith('event: ')) {
+          const eventName = line.substring(7).trim()
+          console.log('Event name:', eventName)
           continue
         }
-        if (line.startsWith('data:')) {
-          const dataStr = line.slice(5).trim()
-          console.log('Data string:', dataStr)
-          if (!dataStr) continue
-
-          if (currentEvent === 'session') {
-            try {
-              const sessionId = JSON.parse(dataStr)
-              currentSessionId.value = sessionId
-              console.log('New session ID:', sessionId)
-              if (!sessions.value.find(s => s.id === sessionId)) {
-                await loadSessions()
-              }
-            } catch {
-              currentSessionId.value = parseInt(dataStr)
-              console.log('New session ID (parsed):', currentSessionId.value)
-              if (!sessions.value.find(s => s.id === currentSessionId.value)) {
-                await loadSessions()
-              }
-            }
-            currentEvent = ''
-            continue
+        
+        if (line.startsWith('data: ')) {
+          const dataContent = line.substring(6).trim()
+          console.log('Data content:', dataContent)
+          
+          if (!dataContent) continue
+          
+          fullContent += dataContent
+          
+          let lastMsg = messages.value[messages.value.length - 1]
+          if (lastMsg && lastMsg.role === 'user') {
+            messages.value.push({
+              id: Date.now() + 1,
+              sessionId: currentSessionId.value,
+              role: 'assistant',
+              content: fullContent,
+              createTime: new Date().toLocaleString()
+            })
+          } else if (lastMsg && lastMsg.role === 'assistant') {
+            lastMsg.content = fullContent
+            lastMsg.createTime = new Date().toLocaleString()
           }
-
-          fullContent += dataStr
-          console.log('Appended from text:', dataStr)
-
-          if (fullContent) {
-            let lastMsg = messages.value[messages.value.length - 1]
-            if (lastMsg && lastMsg.role === 'user') {
-              messages.value.push({
-                id: Date.now() + 1,
-                sessionId: currentSessionId.value,
-                role: 'assistant',
-                content: fullContent,
-                createTime: new Date().toLocaleString()
-              })
-            } else if (lastMsg && lastMsg.role === 'assistant') {
-              lastMsg.content = fullContent
-              lastMsg.createTime = new Date().toLocaleString()
-            }
-            scrollToBottom()
-          }
+          scrollToBottom()
+        } else if (line.startsWith('id: ')) {
+          continue
         }
       }
     }
 
-    } catch (error: any) {
+  } catch (error: any) {
     console.error('发送消息失败:', error)
     alert('发送消息失败: ' + (error.message || '未知错误'))
   } finally {
