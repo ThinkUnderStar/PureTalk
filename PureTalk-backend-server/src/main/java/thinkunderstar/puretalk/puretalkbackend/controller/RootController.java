@@ -107,5 +107,4 @@ public class RootController {
     public Result deleteAdmin(@RequestParam String phone) {
         return sysRootService.deleteAdmin(phone);
     }
-
 }

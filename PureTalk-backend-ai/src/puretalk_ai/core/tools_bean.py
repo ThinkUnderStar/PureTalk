@@ -1,3 +1,4 @@
+from puretalk_ai.tools.execute_sql_tool import ExecuteSqlTool
 from puretalk_ai.tools.get_feedbacks_tool import GetFeedbacksTool
 from puretalk_ai.tools.get_notification_target_tool import GetNotificationTargetTool
 from puretalk_ai.tools.get_notifications_tool import GetNotificationsTool
@@ -18,3 +19,4 @@ get_notification_target_tool_bean = GetNotificationTargetTool()
 get_feedbacks_tool_bean = GetFeedbacksTool()
 get_reports_tool_bean = GetReportsTool()
 get_report_target_tool_bean = GetReportTargetTool()
+execute_sql_tool_bean = ExecuteSqlTool()

@@ -1,6 +1,5 @@
 package thinkunderstar.puretalk.puretalkbackend.service;
 
-import org.springframework.web.bind.annotation.RequestBody;
 import thinkunderstar.puretalk.puretalkbackend.common.DoRegister;
 import thinkunderstar.puretalk.puretalkbackend.common.Result;
 
@@ -33,4 +32,12 @@ public interface SysRootService {
      * @return 返回一个Result对象，包含状态码、提示信息及数据。成功时返回200状态码，失败则返回500状态码，并附带相应的错误信息
      */
     Result deleteAdmin(String phone);
+
+    /**
+     * 检查并执行AI传过来的查询sql
+     *
+     * @param sql AI传会来的sql语句
+     * @return 查询结果
+     */
+    Result executeSql(String sql);
 }

@@ -1,10 +1,5 @@
 package thinkunderstar.puretalk.puretalkbackend.api;
 
-import cn.dev33.satoken.annotation.SaCheckLogin;
-import cn.dev33.satoken.annotation.SaCheckRole;
-import cn.dev33.satoken.annotation.SaMode;
-import org.springframework.scheduling.annotation.Async;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.*;
 import thinkunderstar.puretalk.puretalkbackend.common.DoHandleReport;
 import thinkunderstar.puretalk.puretalkbackend.common.DoReport;
