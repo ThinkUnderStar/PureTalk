@@ -154,7 +154,15 @@ const completeBackgroundTask = (sessionId: number, finalMessages: AiMessage[]) =
   
   if (sessionId === currentSessionId.value) {
     sessionMessagesCache.value[sessionId] = [...finalMessages]
-    loadMessages(sessionId)
+    
+    messages.value = [...finalMessages]
+    scrollToBottom()
+    
+    if (sessionId !== 0) {
+      setTimeout(() => {
+        loadMessages(sessionId, true)
+      }, 500)
+    }
   } else {
     sessionMessagesCache.value[sessionId] = [...finalMessages]
   }
@@ -320,6 +328,11 @@ const sendMessage = async () => {
         throw new Error('无法读取响应流')
       }
 
+      const shouldUpdateUI = () => {
+        if (originalSessionId === 0) return true
+        return currentSession === currentSessionId.value
+      }
+
       while (true) {
         const { done, value } = await reader.read()
         
@@ -350,6 +363,11 @@ const sendMessage = async () => {
             }
           }
           
+          if (shouldUpdateUI()) {
+            messages.value = [...taskMessages]
+            scrollToBottom()
+          }
+          
           completeBackgroundTask(currentSession, taskMessages)
           return
         }
@@ -367,12 +385,47 @@ const sendMessage = async () => {
           if (!dataContent) continue
           
           if (!isNaN(parseInt(dataContent)) && currentSession === 0) {
-            currentSession = parseInt(dataContent)
+            const newSessionId = parseInt(dataContent)
+            currentSession = newSessionId
+            currentSessionId.value = newSessionId
+            
+            const newSession = {
+              id: newSessionId,
+              userId: userId.value,
+              title: messageText.substring(0, 20) + (messageText.length > 20 ? '...' : ''),
+              createTime: new Date().toLocaleString()
+            }
+            
+            if (!sessions.value.find(s => s.id === newSessionId)) {
+              sessions.value = [newSession, ...sessions.value]
+            }
+            
+            taskMessages.push({
+              id: Date.now() + 1,
+              sessionId: currentSession,
+              role: 'assistant',
+              content: '',
+              createTime: new Date().toLocaleString()
+            })
+            
+            if (shouldUpdateUI()) {
+              messages.value = [...taskMessages]
+              scrollToBottom()
+            }
+            
+            if (backgroundTasks.value[taskKey]) {
+              backgroundTasks.value[newSessionId] = {
+                ...backgroundTasks.value[taskKey],
+                sessionId: newSessionId,
+                messages: taskMessages
+              }
+              delete backgroundTasks.value[taskKey]
+            }
+            
             continue
           }
           
           const parsedContent = parseStreamingChunk(dataContent)
-          fullContent += parsedContent
           
           let lastMsg = taskMessages[taskMessages.length - 1]
           if (lastMsg && lastMsg.role === 'user') {
@@ -380,15 +433,20 @@ const sendMessage = async () => {
               id: Date.now() + 1,
               sessionId: currentSession,
               role: 'assistant',
-              content: fullContent,
+              content: '',
               createTime: new Date().toLocaleString()
             })
-          } else if (lastMsg && lastMsg.role === 'assistant') {
+          }
+          
+          fullContent += parsedContent
+          
+          lastMsg = taskMessages[taskMessages.length - 1]
+          if (lastMsg && lastMsg.role === 'assistant') {
             lastMsg.content = fullContent
             lastMsg.createTime = new Date().toLocaleString()
           }
           
-          if (currentSession === currentSessionId.value) {
+          if (shouldUpdateUI()) {
             messages.value = [...taskMessages]
             scrollToBottom()
           }
@@ -402,16 +460,21 @@ const sendMessage = async () => {
         console.log('请求已取消')
       } else {
         console.error('发送消息失败:', error)
-        if (currentSession === currentSessionId.value) {
+        if (shouldUpdateUI()) {
           alert('发送消息失败: ' + (error.message || '未知错误'))
         }
       }
     } finally {
       clearTimeout(timeoutId)
-      if (currentSession === currentSessionId.value) {
+      if (shouldUpdateUI()) {
         isStreaming.value = false
       }
-      delete backgroundTasks.value[taskKey]
+      if (backgroundTasks.value[taskKey]) {
+        delete backgroundTasks.value[taskKey]
+      }
+      if (backgroundTasks.value[currentSession]) {
+        delete backgroundTasks.value[currentSession]
+      }
     }
   }
 

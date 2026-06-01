@@ -167,6 +167,61 @@
         </div>
       </div>
     </div>
+
+    <!-- 用户帖子模态框 -->
+    <div v-if="showUserPostsModal" class="modal-overlay" @click="closeUserPostsModal">
+      <div class="modal-content user-posts-modal" @click.stop>
+        <div class="modal-header">
+          <div class="user-info">
+            <img 
+              :src="targetUserInfo.avatar || 'https://ui-avatars.com/api/?name=' + targetUserInfo.userName + '&background=random&size=64'" 
+              :alt="targetUserInfo.userName" 
+              class="modal-user-avatar"
+            />
+            <h2>{{ targetUserInfo.userName }}的帖子</h2>
+          </div>
+          <button class="close-btn" @click="closeUserPostsModal">&times;</button>
+        </div>
+        <div class="modal-body user-posts-body" @scroll="handleUserPostsScroll">
+          <div v-if="userPosts.length === 0 && !loadingUserPosts" class="empty-state">
+            暂无帖子
+          </div>
+          <div 
+            v-for="post in userPosts" 
+            :key="post.id" 
+            class="user-post-item"
+            @click="goToPostDetail(post.id)"
+          >
+            <h3 class="user-post-title">{{ post.title }}</h3>
+            <p class="user-post-content">{{ post.content }}</p>
+            <div class="user-post-meta">
+              <span class="user-post-time">{{ post.createTime }}</span>
+              <div class="user-post-stats">
+                <span class="stat-item">
+                  <span class="stat-icon iconfont icon-dianzan"></span>
+                  <span>{{ post.likeCount }}</span>
+                </span>
+                <span class="stat-item">
+                  <span class="stat-icon iconfont icon-liulan"></span>
+                  <span>{{ post.viewCount }}</span>
+                </span>
+                <span class="stat-item">
+                  <span class="stat-icon iconfont icon-pinglun"></span>
+                  <span>{{ post.commentCount }}</span>
+                </span>
+              </div>
+            </div>
+          </div>
+          <div v-if="loadingUserPosts" class="loading">
+            <div class="loading-spinner"></div>
+            <p>加载中...</p>
+          </div>
+          <div v-if="!loadingUserPosts && userPostsHasMore && userPosts.length > 0" class="load-more-hint">
+            上拉加载更多
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -197,6 +252,18 @@ const postForm = ref({
 const searchKeyword = ref<string>('')
 const isSearching = ref<boolean>(false)
 const isHeaderCollapsed = ref<boolean>(true)
+
+// 用户帖子模态框相关
+const showUserPostsModal = ref<boolean>(false)
+const targetUserInfo = ref({
+  userId: 0,
+  userName: '',
+  avatar: ''
+})
+const userPosts = ref<Post[]>([])
+const loadingUserPosts = ref<boolean>(false)
+const userPostsPage = ref<number>(1)
+const userPostsHasMore = ref<boolean>(true)
 
 const toggleHeader = () => {
   isHeaderCollapsed.value = !isHeaderCollapsed.value
@@ -240,11 +307,54 @@ const switchCategory = (category: string) => {
 
 const goToUserProfile = (userId: number) => {
   if (userId === currentUserId.value) {
+    // 自己的头像，保持原跳转
     router.push('/user/profile')
   } else {
+    // 别人的头像，跳转到用户主页
     router.push(`/user/${userId}`)
   }
 }
+
+const openUserPostsModal = async (userId: number, userName: string, avatar: string) => {
+  targetUserInfo.value = { userId, userName, avatar }
+  showUserPostsModal.value = true
+  userPosts.value = []
+  userPostsPage.value = 1
+  userPostsHasMore.value = true
+  await loadUserPosts()
+}
+
+const loadUserPosts = async () => {
+  if (loadingUserPosts.value) return
+  
+  loadingUserPosts.value = true
+  try {
+    const response = await postApi.getUserPosts(targetUserInfo.value.userId, userPostsPage.value, 20)
+    const data = response as any
+    if (data.code === 200) {
+      const newPosts = data.data?.posts?.records || []
+      userPosts.value = userPostsPage.value === 1 ? newPosts : [...userPosts.value, ...newPosts]
+      userPostsHasMore.value = newPosts.length === 20
+      userPostsPage.value++
+    }
+  } catch (error) {
+    console.error('加载用户帖子失败:', error)
+  } finally {
+    loadingUserPosts.value = false
+  }
+}
+
+const closeUserPostsModal = () => {
+  showUserPostsModal.value = false
+}
+
+const handleUserPostsScroll = debounce((event: Event) => {
+  const target = event.target as HTMLElement
+  const { scrollTop, scrollHeight, clientHeight } = target
+  if (scrollTop + clientHeight >= scrollHeight - 100 && !loadingUserPosts.value && userPostsHasMore.value) {
+    loadUserPosts()
+  }
+}, 200)
 
 const handleSearch = () => {
   if (!searchKeyword.value.trim()) {
@@ -858,6 +968,110 @@ onMounted(() => {
 
 .delete-btn:hover {
   background-color: #ff3742;
+}
+
+/* 用户帖子模态框样式 */
+.user-posts-modal {
+  max-width: 600px;
+  width: 95%;
+}
+
+.user-posts-modal .modal-header .user-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.modal-user-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e0e0e0;
+}
+
+.user-posts-body {
+  max-height: 60vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.empty-state {
+  text-align: center;
+  color: #999;
+  padding: 3rem;
+  font-size: 1rem;
+}
+
+.user-post-item {
+  padding: 1.25rem;
+  background: rgba(102, 126, 234, 0.04);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
+}
+
+.user-post-item:hover {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.08));
+  transform: translateY(-2px);
+  border-color: rgba(102, 126, 234, 0.2);
+}
+
+.user-post-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.4;
+}
+
+.user-post-content {
+  font-size: 0.92rem;
+  color: #666;
+  margin: 0 0 0.75rem 0;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.user-post-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.user-post-time {
+  font-size: 0.82rem;
+  color: #999;
+}
+
+.user-post-stats {
+  display: flex;
+  gap: 1rem;
+}
+
+.user-post-stats .stat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.user-post-stats .stat-icon {
+  font-size: 0.9rem;
+}
+
+.load-more-hint {
+  text-align: center;
+  color: #999;
+  padding: 1.5rem;
+  font-size: 0.85rem;
 }
 
 @media (max-width: 768px) {

@@ -1,5 +1,5 @@
 <template>
-  <div class="user-profile">
+  <div class="user-profile" :class="{ 'fixed-height': !isOwnProfile }">
     <header class="header">
       <button class="back-btn" @click="goBack">← 返回</button>
       <h1>{{ isOwnProfile ? '我的主页' : `${userInfo.userName}的主页` }}</h1>
@@ -8,8 +8,9 @@
       </div>
     </header>
 
-    <main class="main">
-      <div class="profile-card">
+    <main class="main" :class="{ 'no-scroll': !isOwnProfile }">
+      <!-- 自己的主页 -->
+      <div v-if="isOwnProfile" class="profile-card">
         <div class="profile-header">
           <div class="avatar-wrapper">
             <img
@@ -36,11 +37,11 @@
 
         <button class="menu-item" @click="goToUserPosts()">
           <span class="menu-icon">📝</span>
-          <span class="menu-text">{{ isOwnProfile ? '查看我的帖子' : '查看帖子' }}</span>
+          <span class="menu-text">查看我的帖子</span>
           <span class="menu-arrow">›</span>
         </button>
 
-        <div v-if="isOwnProfile" class="profile-menu">
+        <div class="profile-menu">
           <button class="menu-item" @click="showEditForm = true">
             <span class="menu-icon">✏️</span>
             <span class="menu-text">修改信息</span>
@@ -58,7 +59,7 @@
           </router-link>
         </div>
 
-        <div v-if="showEditForm && isOwnProfile" class="edit-section">
+        <div v-if="showEditForm" class="edit-section">
           <h3>修改个人信息</h3>
           <div class="profile-form">
             <div class="form-group">
@@ -118,15 +119,72 @@
           </div>
         </div>
 
-        <div v-if="isOwnProfile" class="danger-zone">
+        <div class="danger-zone">
           <h3>危险操作</h3>
           <button class="delete-btn" @click="confirmDelete">删除账户</button>
         </div>
       </div>
 
-      <div v-if="showPosts" class="posts-section">
+      <!-- 别人的主页：简易主界面，直接显示帖子 -->
+      <div v-else class="simple-profile">
+        <div class="simple-profile-card">
+          <div class="simple-profile-header">
+            <img
+              :src="avatar || 'https://ui-avatars.com/api/?name=' + userInfo.userName + '&background=random&size=128'"
+              :alt="userInfo.userName"
+              class="simple-avatar"
+            />
+            <h2>{{ userInfo.userName }}</h2>
+          </div>
+        </div>
+        
+        <!-- 帖子列表，可滚动 -->
+        <div class="posts-container" @scroll="debouncedHandlePostsScroll">
+          <div class="posts-list-wrapper">
+            <div
+              v-for="post in userPosts"
+              :key="post.id"
+              class="post-item"
+              @click="goToPostDetail(post.id)"
+            >
+              <h4 class="post-title">{{ post.title }}</h4>
+              <p class="post-content">{{ post.content }}</p>
+              <div class="post-meta">
+                <span class="post-time">{{ post.createTime }}</span>
+              </div>
+              <div class="post-stats">
+                <span class="stat-item">
+                  <span class="stat-icon iconfont icon-dianzan"></span>
+                  <span>{{ post.likeCount }}</span>
+                </span>
+                <span class="stat-item">
+                  <span class="stat-icon iconfont icon-liulan"></span>
+                  <span>{{ post.viewCount }}</span>
+                </span>
+                <span class="stat-item">
+                  <span class="stat-icon iconfont icon-pinglun"></span>
+                  <span>{{ post.commentCount }}</span>
+                </span>
+              </div>
+            </div>
+            <div v-if="loadingPosts" class="loading">
+              <div class="loading-spinner"></div>
+              <p>加载中...</p>
+            </div>
+            <div v-if="!loadingPosts && userPosts.length === 0" class="no-posts">
+              暂无帖子
+            </div>
+            <div v-if="!loadingPosts && userPostsHasMore && userPosts.length > 0" class="load-more-hint">
+              上拉加载更多
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 自己主页的帖子部分 -->
+      <div v-if="showPosts && isOwnProfile" class="posts-section">
         <div class="posts-header">
-          <h3>{{ isOwnProfile ? '我的帖子' : `${userInfo.userName}的帖子` }}</h3>
+          <h3>我的帖子</h3>
           <button class="close-posts-btn" @click="showPosts = false">关闭</button>
         </div>
         <div class="posts-list">
@@ -140,11 +198,7 @@
             <p class="post-content">{{ post.content }}</p>
             <div class="post-meta">
               <span class="post-time">{{ post.createTime }}</span>
-              <button
-                v-if="isOwnProfile"
-                class="delete-btn"
-                @click.stop="deletePost(post.id)"
-              >
+              <button class="delete-btn" @click.stop="deletePost(post.id)">
                 删除
               </button>
             </div>
@@ -208,6 +262,11 @@ const errors = ref({
   email: '',
   password: ''
 })
+const showPosts = ref<boolean>(false)
+const userPosts = ref<Post[]>([])
+const loadingPosts = ref<boolean>(false)
+const userPostsPage = ref<number>(1)
+const userPostsHasMore = ref<boolean>(true)
 
 const isOwnProfile = computed(() => {
   const routeUserId = Number(route.params.userId)
@@ -224,10 +283,69 @@ const viewFullAvatar = () => {
 const goToUserPosts = () => {
   if (isOwnProfile.value) {
     router.push('/user/posts')
-  } else {
-    router.push(`/user/${route.params.userId}/posts`)
   }
 }
+
+const goToPostDetail = (postId: number) => {
+  router.push(`/post/${postId}`)
+}
+
+const loadUserPosts = async () => {
+  if (loadingPosts.value) return
+  
+  loadingPosts.value = true
+  try {
+    const userId = userInfo.value.userId
+    const response = await postApi.getUserPosts(userId, userPostsPage.value, 20)
+    const data = response as any
+    if (data.code === 200) {
+      const newPosts = data.data?.posts?.records || []
+      userPosts.value = userPostsPage.value === 1 ? newPosts : [...userPosts.value, ...newPosts]
+      userPostsHasMore.value = newPosts.length === 20
+      userPostsPage.value++
+    }
+  } catch (error) {
+    console.error('加载用户帖子失败:', error)
+  } finally {
+    loadingPosts.value = false
+  }
+}
+
+const deletePost = async (postId: number) => {
+  if (!confirm('确定要删除这个帖子吗？')) return
+  
+  try {
+    const response = await postApi.deletePost(postId)
+    const data = response as any
+    if (data.code === 200) {
+      alert('删除成功')
+      userPosts.value = userPosts.value.filter(p => p.id !== postId)
+    } else {
+      alert(data.message || '删除失败')
+    }
+  } catch (error) {
+    console.error('删除帖子失败:', error)
+    alert('删除失败')
+  }
+}
+
+const debounce = (fn: Function, delay: number) => {
+  let timer: number | null = null
+  return function(...args: any[]) {
+    if (timer) clearTimeout(timer)
+    timer = window.setTimeout(() => fn.apply(this, args), delay)
+  }
+}
+
+const handlePostsScroll = (event: Event) => {
+  const target = event.target as HTMLElement
+  const { scrollTop, scrollHeight, clientHeight } = target
+  if (scrollTop + clientHeight >= scrollHeight - 50 && !loadingPosts.value && userPostsHasMore.value) {
+    loadUserPosts()
+  }
+}
+
+const debouncedHandlePostsScroll = debounce(handlePostsScroll, 200)
 
 const triggerAvatarUpload = () => {
   avatarInput.value?.click()
@@ -323,6 +441,8 @@ onMounted(async () => {
       console.error('获取用户信息失败:', error)
       userInfo.value.userName = `用户${userId}`
     }
+    // 别人的主页，直接加载帖子
+    await loadUserPosts()
   }
 })
 
@@ -968,5 +1088,143 @@ const goBack = () => {
   .form-actions {
     flex-direction: column;
   }
+}
+
+/* 简易主界面样式 - 别人的主页 */
+.fixed-height {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.no-scroll {
+  overflow: hidden;
+  height: calc(100vh - 70px);
+  padding: 1rem 1.25rem !important;
+}
+
+.simple-profile {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 1rem;
+}
+
+.simple-profile-card {
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  box-shadow: 0 8px 28px rgba(102, 126, 234, 0.18);
+  padding: 1.25rem;
+  flex-shrink: 0;
+}
+
+.simple-profile-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.simple-avatar {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid rgba(102, 126, 234, 0.4);
+  box-shadow: 0 3px 12px rgba(102, 126, 234, 0.18);
+}
+
+.simple-profile-header h2 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+.posts-container {
+  flex: 1;
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  box-shadow: 0 8px 28px rgba(102, 126, 234, 0.18);
+  padding: 1.25rem;
+}
+
+.posts-list-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.posts-container .post-item {
+  padding: 1rem;
+  background: rgba(102, 126, 234, 0.04);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
+}
+
+.posts-container .post-item:hover {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.08));
+  transform: translateY(-2px);
+  border-color: rgba(102, 126, 234, 0.2);
+}
+
+.posts-container .post-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 0.5rem 0;
+}
+
+.posts-container .post-content {
+  font-size: 0.92rem;
+  color: #666;
+  margin: 0 0 0.75rem 0;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.posts-container .post-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.posts-container .post-time {
+  font-size: 0.82rem;
+  color: #999;
+}
+
+.posts-container .post-stats {
+  display: flex;
+  gap: 1.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+.posts-container .post-stats .stat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.posts-container .post-stats .stat-icon {
+  font-size: 0.9rem;
+}
+
+.load-more-hint {
+  text-align: center;
+  color: #999;
+  padding: 1.5rem;
+  font-size: 0.85rem;
 }
 </style>
